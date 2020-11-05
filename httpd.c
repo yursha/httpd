@@ -1,5 +1,5 @@
 /*
- * httpd.c - a minimal HTTP server 
+ * httpd.c - a minimal HTTP server
  * usage: httpd <port>
  */
 
@@ -60,23 +60,23 @@ extern char **environ; /* the environment */
 void allow_fast_restarts(int sockfd) {
   int optval = 1;
   if (setsockopt(
-      /*sockfd=*/sockfd,
-      /*level=*/SOL_SOCKET,
-      /*optname=*/SO_REUSEADDR, 
-	    /*optval=*/(const void *)&optval,
-			/*optlen=*/sizeof(int)) == -1) {
-		int e = errno;
-		fprintf(stderr, "error setting socket options: %d\n", e);
-		exit(1);
-	}
+        /*sockfd=*/sockfd,
+        /*level=*/SOL_SOCKET,
+        /*optname=*/SO_REUSEADDR, 
+        /*optval=*/(const void *)&optval,
+        /*optlen=*/sizeof(int)) == -1) {
+    int e = errno;
+    fprintf(stderr, "error setting socket options: %d\n", e);
+    exit(1);
+  }
 }
 
 // returns socket file descriptor
 int create_socket() {
-	// create an endpoint for communication
-	int sockfd = socket(
-			/*domain=*/AF_INET,  // IPv4 Internet protocols ip(7)
-			/*type=*/SOCK_STREAM, // sequenced, reliable, two-way byte streams
+  // create an endpoint for communication
+  int sockfd = socket(
+      /*domain=*/AF_INET,  // IPv4 Internet protocols ip(7)
+      /*type=*/SOCK_STREAM, // sequenced, reliable, two-way byte streams
       /*protocol=*/0); // only TCP protocol supports AF_INET + SOCK_STREAM
   // TODO: Many C functions return 0 in case of success and -1 in case of
   // failure. Check with x86-64 assembler which is faster and document and prefer than.
@@ -84,37 +84,37 @@ int create_socket() {
   //  if x == 0
   //  if x == -1
   //  if x < 0
-	if (sockfd == -1) {
-		int e = errno;
-		fprintf(stderr, "error opening a listening socket: %d\n", e);
-		exit(1);
-	}
+  if (sockfd == -1) {
+    int e = errno;
+    fprintf(stderr, "error opening a listening socket: %d\n", e);
+    exit(1);
+  }
   return sockfd;
 }
 
 void start_listening(int sockfd) {
   // https://stackoverflow.com/questions/10002868/what-value-of-backlog-should-i-use
   if (listen(sockfd, /*backlog=*/5) == -1) {
-		int e = errno;
-		fprintf(stderr, "error listening on a socket: %d\n", e);
-		exit(1);
+    int e = errno;
+    fprintf(stderr, "error listening on a socket: %d\n", e);
+    exit(1);
   }
 
 }
 
 void bind_port_to_socket(int sockfd, int port) {
   struct sockaddr_in server_address; 
-	bzero((char *) &server_address, sizeof(server_address));
+  bzero((char *) &server_address, sizeof(server_address));
   server_address.sin_family = AF_INET;
   server_address.sin_addr.s_addr = htonl(INADDR_ANY);
   server_address.sin_port = htons((unsigned short)port);
   if (bind(
-      /*sockfd=*/sockfd,
-      /*addr=*/(struct sockaddr *) &server_address, 
-	    /*addrlen=*/sizeof(server_address)) == -1) {
-		int e = errno;
-		fprintf(stderr, "error on binding: %d\n", e);
-		exit(1);
+        /*sockfd=*/sockfd,
+        /*addr=*/(struct sockaddr *) &server_address, 
+        /*addrlen=*/sizeof(server_address)) == -1) {
+    int e = errno;
+    fprintf(stderr, "error on binding: %d\n", e);
+    exit(1);
   }
 }
 
@@ -122,7 +122,7 @@ void bind_port_to_socket(int sockfd, int port) {
  * cerror - returns an error message to the client
  */
 void cerror(FILE *stream, char *cause, char *error_code, 
-	    char *shortmsg, char *longmsg) {
+    char *shortmsg, char *longmsg) {
   fprintf(stream, "HTTP/1.1 %s %s\n", error_code, shortmsg);
   fprintf(stream, "Content-type: text/html\n");
   fprintf(stream, "\n");
@@ -202,7 +202,7 @@ int serve_api(char* uri) {
 
 // single-threaded loop
 void start_request_processing_loop(int sockfd) {
-	int connfd; // connected socket file descriptor
+  int connfd; // connected socket file descriptor
   struct sockaddr_in client_address;
   char *hostaddrp; /* dotted decimal host addr string */
   FILE *stream;
@@ -220,9 +220,9 @@ void start_request_processing_loop(int sockfd) {
     // Wait for connection request. A blocking call.
     connfd = accept(sockfd, (struct sockaddr *) &client_address, &client_length);
     if (connfd == -1) {
-			int e = errno;
-			fprintf(stderr, "error accepting a request: %d\n", e);
-			exit(1);
+      int e = errno;
+      fprintf(stderr, "error accepting a request: %d\n", e);
+      exit(1);
     }
 
     // Determine who sent the message
@@ -231,27 +231,27 @@ void start_request_processing_loop(int sockfd) {
     // TODO: How does gethostbyaddr signal errors?
     hostp = gethostbyaddr(
         /*addr=*/(const char *)&client_address.sin_addr.s_addr, 
-			  /*len=*/sizeof(client_address.sin_addr.s_addr),
+        /*len=*/sizeof(client_address.sin_addr.s_addr),
         /*type=*/ AF_INET);
 
     if (hostp == NULL) {
-			int e = errno;
-			fprintf(stderr, "error getting client host information: %d\n", e);
-			exit(1);
+      int e = errno;
+      fprintf(stderr, "error getting client host information: %d\n", e);
+      exit(1);
     }
 
     hostaddrp = inet_ntoa(client_address.sin_addr);
     if (hostaddrp == NULL) {
-			int e = errno;
-			fprintf(stderr, "error on inet_ntoa: %d\n", e);
-			exit(1);
+      int e = errno;
+      fprintf(stderr, "error on inet_ntoa: %d\n", e);
+      exit(1);
     }
 
     /* open the child socket descriptor as a stream */
     if ((stream = fdopen(connfd, "r+")) == NULL) {
-			int e = errno;
-			fprintf(stderr, "error on fdopen: %d\n", e);
-			exit(1);
+      int e = errno;
+      fprintf(stderr, "error on fdopen: %d\n", e);
+      exit(1);
     }
 
     /* get the HTTP request line */
@@ -262,7 +262,7 @@ void start_request_processing_loop(int sockfd) {
     /* We only support the GET method */
     if (strcasecmp(method, "GET")) {
       cerror(stream, method, "501", "Not Implemented", 
-	     "CodeWatch HTTP server does not implement this method");
+          "CodeWatch HTTP server does not implement this method");
       fclose(stream);
       close(connfd);
       continue;
@@ -315,23 +315,23 @@ void init_signals() {
 }
 
 int main(int argc, char **argv) {
-	int port; // port number to listen on
-	int sockfd; // listening socket file descriptor
+  int port; // port number to listen on
+  int sockfd; // listening socket file descriptor
 
-	// check command line args
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s <port>\n", argv[0]);
-		exit(1);
-	}
+  // check command line args
+  if (argc != 2) {
+    fprintf(stderr, "usage: %s <port>\n", argv[0]);
+    exit(1);
+  }
 
   init_signals();
 
   sockfd = create_socket();
   allow_fast_restarts(sockfd);
 
-	port = atoi(argv[1]);
+  port = atoi(argv[1]);
   bind_port_to_socket(sockfd, port);
-	fprintf(stdout, "Listening on port: %d\n", port);
+  fprintf(stdout, "Listening on port: %d\n", port);
   start_listening(sockfd);
   start_request_processing_loop(sockfd);
 
