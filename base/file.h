@@ -1,6 +1,5 @@
 #pragma once
 
-#include "type.h"
 #include "linux.h"
 
 /* Open files */
@@ -11,17 +10,17 @@
 #define FILE_APPEND /*CREAT=*/0100|/*APPEND=*/02000      // FOR WRONLY & RDWR (local files only)
 #define FILE_TRUNCATE_IF_EXISTS /*TRUNC=*/01000          // FOR WRONLY & RDWR
 
-i32 file_open_to_read(const char* pathname, i32 flags);
+int file_open_to_read(const char* pathname, int flags);
 
-i32 file_open_to_write(const char* pathname, i32 flags, u32 mode);
+int file_open_to_write(const char* pathname, int flags, u32 mode);
 
-i32 file_open_to_read_and_write(const char* pathname, i32 flags, u32 mode);
+int file_open_to_read_and_write(const char* pathname, int flags, u32 mode);
 
-i32 file_open_to_append(const char* pathname, u32 mode);
+int file_open_to_append(const char* pathname, u32 mode);
 
 /* Read files */
 
-i64 file_read(i32 fd, void* buffer, u64 count);
+i64 file_read(int fd, void* buffer, u64 count);
 
 /* Write to files */
 
@@ -29,13 +28,13 @@ void file_stdout(const char* str, ...);
 
 void file_stderr(const char* str, ...);
 
-void file_write_all(i32 fd, const char* str, ...);
+void file_write_all(int fd, const char* str, ...);
 
-void file_write(i32 fd, const char* str, i32 len);
+void file_write(int fd, const char* str, int len);
 
 /* Close files */
 
-i32 file_close(i32 fd);
+int file_close(int fd);
 
 /* inode information */
 
@@ -43,13 +42,13 @@ i32 file_close(i32 fd);
 // man 2 stat
 // man 7 inode
 
-i32 file_info_read(const char* pathname, struct file_info* info);
+int file_info_read(const char* pathname, struct file_info* info);
 
 u32 file_info_perm(const struct file_info* info);
 
 /* Read directory */
 
-// i32 file_dir_read(u32 fd, struct dir_info* info, u32 count);
+// int file_dir_read(u32 fd, struct dir_info* info, u32 count);
 
 /* Walk file system */
 

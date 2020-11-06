@@ -2,121 +2,38 @@
  * httpd.c - a minimal HTTP server
  * usage: httpd <port>
  */
-
-/*
- * https://tools.ietf.org/html/rfc793 - TCP
- * https://tools.ietf.org/html/rfc8200 - IPv6 Specification
- */
-
-/***   INCLUDES   ***/
-
-// inet_ntoa, htonl
 #include <arpa/inet.h>
-
-// errno
 #include <errno.h>
-
-// open
 #include <fcntl.h>
-
-// gethostbyaddr
 #include <netdb.h>
-
-// FILE, fclose, fgets, fdopen, fflush, fprintf, fwrite, perror, sprintf, sscanf, stderr, stdout
+#include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
-
-// atoi, exit, setenv
 #include <stdlib.h>
-
-// strcat, strcmp, strcpy, strlen, strstr
-#include <str.h>
-
-// bzero, index, strcasecmp
+#include <string.h>
 #include <strings.h>
-
-// mmap, munmap
 #include <sys/mman.h>
-
-// accept, bind, listen, socket
+#include <sys/types.h>
 #include <sys/socket.h>
-
-// stat
 #include <sys/stat.h>
-
-// wait
-#include <sys/wait.h>
-
-// close, dup2, execve, fork, write
 #include <unistd.h>
-
-/***   CODE   ***/
 
 #define BUFFER_SIZE 1024
 
-extern char **environ; /* the environment */
+#define MSGLEN_MAX 256
+char msgbuf[MSGLEN_MAX] = "";
 
-// Allow fast server restarts.
-// https://stackoverflow.com/questions/3229860/what-is-the-meaning-of-so-reuseaddr-setsockopt-option-linux
-void allow_fast_restarts(int sockfd) {
-  int optval = 1;
-  if (setsockopt(
-        /*sockfd=*/sockfd,
-        /*level=*/SOL_SOCKET,
-        /*optname=*/SO_REUSEADDR, 
-        /*optval=*/(const void *)&optval,
-        /*optlen=*/sizeof(int)) == -1) {
-    int e = errno;
-    fprintf(stderr, "error setting socket options: %d\n", e);
-    exit(1);
-  }
-}
+#define FAIL(msg) \
+  snprintf(msgbuf, MSGLEN_MAX, "%s %s:%d %s() ERROR %s", \
+           argv[0], __FILE__, __LINE__, __func__, #msg); \
+  perror(msgbuf); \
+  exit(1);
 
-// returns socket file descriptor
-int create_socket() {
-  // create an endpoint for communication
-  int sockfd = socket(
-      /*domain=*/AF_INET,  // IPv4 Internet protocols ip(7)
-      /*type=*/SOCK_STREAM, // sequenced, reliable, two-way byte streams
-      /*protocol=*/0); // only TCP protocol supports AF_INET + SOCK_STREAM
-  // TODO: Many C functions return 0 in case of success and -1 in case of
-  // failure. Check with x86-64 assembler which is faster and document and prefer than.
-  // What is faster:
-  //  if x == 0
-  //  if x == -1
-  //  if x < 0
-  if (sockfd == -1) {
-    int e = errno;
-    fprintf(stderr, "error opening a listening socket: %d\n", e);
-    exit(1);
-  }
-  return sockfd;
-}
-
-void start_listening(int sockfd) {
-  // https://stackoverflow.com/questions/10002868/what-value-of-backlog-should-i-use
-  if (listen(sockfd, /*backlog=*/5) == -1) {
-    int e = errno;
-    fprintf(stderr, "error listening on a socket: %d\n", e);
-    exit(1);
-  }
-
-}
-
-void bind_port_to_socket(int sockfd, int port) {
-  struct sockaddr_in server_address; 
-  bzero((char *) &server_address, sizeof(server_address));
-  server_address.sin_family = AF_INET;
-  server_address.sin_addr.s_addr = htonl(INADDR_ANY);
-  server_address.sin_port = htons((unsigned short)port);
-  if (bind(
-        /*sockfd=*/sockfd,
-        /*addr=*/(struct sockaddr *) &server_address, 
-        /*addrlen=*/sizeof(server_address)) == -1) {
-    int e = errno;
-    fprintf(stderr, "error on binding: %d\n", e);
-    exit(1);
-  }
-}
+#define LOG1(msg, arg1) \
+  snprintf(msgbuf, MSGLEN_MAX, "%s %s:%d %s() INFO ", \
+           argv[0], __FILE__, __LINE__, __func__); \
+  printf("%s", msgbuf); \
+  printf(msg, arg1);
 
 /*
  * cerror - returns an error message to the client
@@ -135,11 +52,11 @@ void cerror(FILE *stream, char *cause, char *error_code,
 
 // Doesn't own `stream` or `connfd`. Doesn't close either of them.
 // Returns 0 on success, -1 on failure
-int serve_static(char* uri, FILE* stream, int connfd) {
+int serve_file(char* uri, FILE* stream, int connfd, const char* dir) {
   char filename[BUFFER_SIZE];
   char filetype[BUFFER_SIZE];
   fprintf(stdout, "Serving static content\n");
-  strcpy(filename, ".");
+  strcpy(filename, dir);
   strcat(filename, uri);
 
   /* make sure the file exists */
@@ -194,67 +111,42 @@ int serve_static(char* uri, FILE* stream, int connfd) {
   return 0;
 }
 
-// Returns 0 on success, -1 on failure
-int serve_api(char* uri) {
-  fprintf(stdout, "Serving API request\n");
-  return 0;
-}
-
 // single-threaded loop
-void start_request_processing_loop(int sockfd) {
-  int connfd; // connected socket file descriptor
-  struct sockaddr_in client_address;
-  char *hostaddrp; /* dotted decimal host addr string */
-  FILE *stream;
-  char buffer[BUFFER_SIZE];     /* message buffer */
-  char method[BUFFER_SIZE];  /* request method */
-  char uri[BUFFER_SIZE];     /* request uri */
-  char version[BUFFER_SIZE]; /* request method */
-  char cgiargs[BUFFER_SIZE]; /* cgi argument list */
-  char *p;               /* temporary pointer */
-  int is_static;         /* static request? */
-  int pid;               /* process id from fork */
-  int wait_status;       /* status from wait */
-  socklen_t client_length = sizeof(client_address);
+void start_request_processing_loop(int sockfd, const char* dir) {
   while (1) {
-    // Wait for connection request. A blocking call.
-    connfd = accept(sockfd, (struct sockaddr *) &client_address, &client_length);
+    struct sockaddr_in client_address;
+    socklen_t length_ptr = sizeof client_address;
+    int connfd = accept(sockfd, (struct sockaddr*) &client_address, &length_ptr);
     if (connfd == -1) {
-      int e = errno;
-      fprintf(stderr, "error accepting a request: %d\n", e);
+      fprintf(stderr, "Error %d in %s:%d\n", errno, __FILE__, __LINE__);
       exit(1);
     }
 
-    // Determine who sent the message
-    struct hostent *hostp; /* client host info */
-    // TODO: gethostbyaddr is obsolete. Replace.
-    // TODO: How does gethostbyaddr signal errors?
-    hostp = gethostbyaddr(
-        /*addr=*/(const char *)&client_address.sin_addr.s_addr, 
-        /*len=*/sizeof(client_address.sin_addr.s_addr),
-        /*type=*/ AF_INET);
-
+    struct hostent* hostp = gethostbyaddr(&client_address.sin_addr.s_addr, 
+        sizeof client_address.sin_addr.s_addr, AF_INET);
     if (hostp == NULL) {
-      int e = errno;
-      fprintf(stderr, "error getting client host information: %d\n", e);
+      fprintf(stderr, "error getting client host information: %d\n", errno);
       exit(1);
     }
 
-    hostaddrp = inet_ntoa(client_address.sin_addr);
+    char* hostaddrp = inet_ntoa(client_address.sin_addr);
     if (hostaddrp == NULL) {
-      int e = errno;
-      fprintf(stderr, "error on inet_ntoa: %d\n", e);
+      fprintf(stderr, "error on inet_ntoa: %d\n", errno);
       exit(1);
     }
 
     /* open the child socket descriptor as a stream */
+    FILE *stream;
     if ((stream = fdopen(connfd, "r+")) == NULL) {
-      int e = errno;
-      fprintf(stderr, "error on fdopen: %d\n", e);
+      fprintf(stderr, "error on fdopen: %d\n", errno);
       exit(1);
     }
 
     /* get the HTTP request line */
+    char buffer[BUFFER_SIZE];
+    char method[BUFFER_SIZE];
+    char uri[BUFFER_SIZE];
+    char version[BUFFER_SIZE];
     fgets(buffer, BUFFER_SIZE, stream);
     fprintf(stdout, "%s", buffer);
     sscanf(buffer, "%s %s %s\n", method, uri, version);
@@ -277,63 +169,60 @@ void start_request_processing_loop(int sockfd) {
     }
 
     if (!strcmp("/", uri)) {
-      if (serve_static("/static/index.html", stream, connfd) == -1) {
-        fclose(stream);
-        close(connfd);
-        continue;
-      }
-    } else if (strstr(uri, "static")) { //check that it starts with "static", not contains
-      if (serve_static(uri, stream, connfd) == -1) {
-        fclose(stream);
-        close(connfd);
-        continue;
-      }
-    } else {
-      if (serve_api(uri) == -1) {
-        fclose(stream);
-        close(connfd);
-        continue;
-      }
+      strcpy(uri, "/index.html");
     }
-
-    /* clean up */
+    serve_file(uri, stream, connfd, dir);
     fclose(stream);
     close(connfd);
   }
 }
 
-// Disables SIGPIPE caused by clients closing connections earlier
-void init_signals() {
-  struct sigaction sa;
-  memset(&sa, 0, sizeof(struct sigaction));
-  sa.sa_handler = SIG_IGN;
-  sigemptyset(&sa.sa_mask);
-  if (sigaction(SIGPIPE, &sa, NULL) == -1) {
-    fprintf(stderr, "error: failed to disable SIGPIPE");
-    exit(1);
-  }
-}
-
 int main(int argc, char **argv) {
-  int port; // port number to listen on
-  int sockfd; // listening socket file descriptor
+  if (argc != 3) {
+    fprintf(stderr, "Usage: %s <port> <directory>\n", argv[0]);
+    exit(1);
+  }
+  int port = atoi(argv[1]);
+  char* dir = argv[2];
 
-  // check command line args
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s <port>\n", argv[0]);
+  struct sigaction action;
+  memset(&action, 0, sizeof(struct sigaction));
+  action.sa_handler = SIG_IGN;
+  sigemptyset(&action.sa_mask);
+  if (sigaction(SIGPIPE, &action, NULL) == -1) {
+    fprintf(stderr, "Error: Cannot disable SIGPIPE");
     exit(1);
   }
 
-  init_signals();
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd == -1) {
+    fprintf(stderr, "Error: Cannot create a TCP/IP socket: %d\n", errno);
+    exit(1);
+  }
 
-  sockfd = create_socket();
-  allow_fast_restarts(sockfd);
+  int optval = 1;
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval) == -1) {
+    fprintf(stderr, "Error: Cannot configure the TCP/IP socket for fast restarts: %d\n", errno);
+    exit(1);
+  }
 
-  port = atoi(argv[1]);
-  bind_port_to_socket(sockfd, port);
-  fprintf(stdout, "Listening on port: %d\n", port);
-  start_listening(sockfd);
-  start_request_processing_loop(sockfd);
+  struct sockaddr_in server_address; 
+  bzero(&server_address, sizeof server_address);
+  server_address.sin_family = AF_INET;
+  server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+  server_address.sin_port = htons((unsigned short)port);
+  if (bind(sockfd, (struct sockaddr*) &server_address, sizeof server_address) == -1) {
+    FAIL("Cannot bind to a port");
+  }
+
+  if (listen(sockfd, /*backlog=*/5) == -1) {
+    fprintf(stderr, "Error: Cannot start listening on a socket: %d\n", errno);
+    exit(1);
+  }
+
+  LOG1("Listening on port %d\n", port);
+
+  start_request_processing_loop(sockfd, dir);
 
   return 0;
 }

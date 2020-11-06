@@ -2,7 +2,7 @@
 
 #include "file.h"
 
-static i32 count_digits(u64 number, u8 base);
+static int count_digits(u64 number, u8 base);
 
 _Bool str_eq(const char* x, const char* y) {
   while (1) {
@@ -13,7 +13,7 @@ _Bool str_eq(const char* x, const char* y) {
   return 1;
 }
 
-i32 str_len(const char* x) {
+int str_len(const char* x) {
   const char* y = x;
   while (*y != '\0') y++;
   return y - x;
@@ -28,11 +28,11 @@ void str_from_i64(i64 number, u8 base, char* buf) {
 }
 
 void str_from_u64(u64 number, u8 base, char* buf) {
-  i32 digit_count = count_digits(number, base);
+  int digit_count = count_digits(number, base);
   *(buf + digit_count) = '\0';
 
   while (digit_count > 0) {
-    i32 digit = number % base;
+    int digit = number % base;
     *(buf + digit_count - 1) = digit + '0';
     number = number / base;
     digit_count--;
@@ -41,9 +41,9 @@ void str_from_u64(u64 number, u8 base, char* buf) {
 
 /*** PRIVATE ***/
 
-static i32 count_digits(u64 number, u8 base) {
+static int count_digits(u64 number, u8 base) {
   if (number == 0) return 1;
-  i32 count = 0;
+  int count = 0;
   while (number != 0) {
     number = number / base;
     count++;

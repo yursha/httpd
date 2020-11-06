@@ -1,8 +1,6 @@
 #pragma once
 
-#include "type.h"
-
-i32 str_len(const char* x);
+int str_len(const char* x);
 
 _Bool str_eq(const char* x, const char* y);
 

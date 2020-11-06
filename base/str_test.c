@@ -2,7 +2,7 @@
 
 #include "test.h"
 
-i32 main(i32 argc, char** argv, char** envp) {
+int main(int argc, char** argv, char** envp) {
   test_bool("str_eq: x empty, y non-empty", str_eq("", "abc"), 0);
   test_bool("str_eq: x non-empty, y empty", str_eq("abc", ""), 0);
   test_bool("str_eq: both empty", str_eq("", ""), 1);

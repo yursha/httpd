@@ -57,8 +57,8 @@
 // Subsumed syscalls:
 // - open(2)
 // - creat(2)
-i32 sys_openat(i32 dirfd, const char* path, i32 flags, u32 mode) {
-  i32 res;
+int sys_openat(int dirfd, const char* path, int flags, u32 mode) {
+  int res;
   __asm__ volatile (
       "movl    %%ecx, %%r8d\n\t"
       "movl    %%edx, %%ecx\n\t"
@@ -71,7 +71,7 @@ i32 sys_openat(i32 dirfd, const char* path, i32 flags, u32 mode) {
   return res;
 }
 
-i64 sys_read(i32 fd, void* buffer, u64 count) {
+i64 sys_read(int fd, void* buffer, u64 count) {
   i64 res;
   __asm__ volatile (
       "movq    %%rdx, %%rcx\n\t"
@@ -84,7 +84,7 @@ i64 sys_read(i32 fd, void* buffer, u64 count) {
   return res;
 }
 
-i64 sys_write(i32 fd, const void* buf, i64 count) {
+i64 sys_write(int fd, const void* buf, i64 count) {
   i64 res;
   __asm__ volatile (
       "movq    %%rdx, %%rcx\n\t"
@@ -97,8 +97,8 @@ i64 sys_write(i32 fd, const void* buf, i64 count) {
   return res;
 }
 
-i32 sys_close(i32 fd) {
-  i32 res;
+int sys_close(int fd) {
+  int res;
   __asm__ volatile (
       "movl    %%edi, %%esi\n\t"
       "movl    $3, %%edi\n\t"
@@ -109,8 +109,8 @@ i32 sys_close(i32 fd) {
 }
 
 // ./fs/stat.c
-i32 sys_statx(i32 dirfd, const char* pathname, i32 flags, u32 mask, struct file_info* info) {
-  i32 res;
+int sys_statx(int dirfd, const char* pathname, int flags, u32 mask, struct file_info* info) {
+  int res;
   __asm__ volatile (
       "movq    %%r8, %%r9\n\t"
       "movl    %%ecx, %%r8d\n\t"
@@ -134,7 +134,7 @@ i32 sys_statx(i32 dirfd, const char* pathname, i32 flags, u32 mask, struct file_
 
 //////////////////   PROCESS OPERATIONS   ////////////////////////
 
-i64 sys_exit_group(i32 status) {
+i64 sys_exit_group(int status) {
   i64 res;
   __asm__ volatile (
       "movl    %%edi, %%esi\n\t"
